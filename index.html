@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>日签 · 打卡</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              ink: "#1a2e28",
+              moss: "#2f6f5e",
+              mist: "#e8f0ec",
+              sand: "#f3efe6",
+              clay: "#c45c3e",
+            },
+            fontFamily: {
+              display: ['"Source Serif 4"', "Georgia", "serif"],
+              body: ['"DM Sans"', "system-ui", "sans-serif"],
+            },
+            keyframes: {
+              rise: {
+                "0%": { opacity: "0", transform: "translateY(12px)" },
+                "100%": { opacity: "1", transform: "translateY(0)" },
+              },
+              pulseSoft: {
+                "0%, 100%": { opacity: "0.45" },
+                "50%": { opacity: "0.75" },
+              },
+            },
+            animation: {
+              rise: "rise 0.6s ease-out both",
+              "rise-delay": "rise 0.6s ease-out 0.12s both",
+              "pulse-soft": "pulseSoft 6s ease-in-out infinite",
+            },
+          },
+        },
+      };
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        background-image:
+          radial-gradient(ellipse 80% 60% at 20% 10%, rgba(47, 111, 94, 0.18), transparent 55%),
+          radial-gradient(ellipse 70% 50% at 90% 80%, rgba(196, 92, 62, 0.12), transparent 50%),
+          linear-gradient(165deg, #f3efe6 0%, #e8f0ec 48%, #dce8e2 100%);
+      }
+      .grid-fade {
+        background-image:
+          linear-gradient(rgba(26, 46, 40, 0.04) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(26, 46, 40, 0.04) 1px, transparent 1px);
+        background-size: 40px 40px;
+        mask-image: radial-gradient(ellipse 70% 70% at 50% 45%, black, transparent);
+      }
+      .is-invalid {
+        border-color: rgba(196, 92, 62, 0.7) !important;
+        box-shadow: 0 0 0 2px rgba(196, 92, 62, 0.15);
+      }
+      .nav-btn.active {
+        color: #1a2e28;
+        border-bottom-color: #2f6f5e;
+      }
+      .field {
+        width: 100%;
+        border-radius: 0.5rem;
+        border: 1px solid rgba(26, 46, 40, 0.15);
+        background: rgba(255, 255, 255, 0.7);
+        padding: 0.75rem 1rem;
+        outline: none;
+        transition: 0.2s;
+      }
+      .field:focus {
+        border-color: rgba(47, 111, 94, 0.5);
+        background: #fff;
+        box-shadow: 0 0 0 2px rgba(47, 111, 94, 0.2);
+      }
+      .btn-primary {
+        width: 100%;
+        border-radius: 0.5rem;
+        background: #2f6f5e;
+        padding: 0.85rem 1rem;
+        font-weight: 500;
+        color: #fff;
+        transition: 0.2s;
+      }
+      .btn-primary:hover {
+        background: rgba(47, 111, 94, 0.9);
+      }
+      .btn-ghost {
+        border-radius: 0.5rem;
+        border: 1px solid rgba(26, 46, 40, 0.15);
+        padding: 0.5rem 0.9rem;
+        font-size: 0.875rem;
+        transition: 0.2s;
+      }
+      .btn-ghost:hover {
+        background: rgba(255, 255, 255, 0.7);
+      }
+    </style>
+  </head>
+  <body class="min-h-screen font-body text-ink antialiased">
+    <div class="grid-fade pointer-events-none fixed inset-0" aria-hidden="true"></div>
+    <div
+      class="pointer-events-none fixed -left-24 top-16 h-64 w-64 animate-pulse-soft rounded-full bg-moss/20 blur-3xl"
+      aria-hidden="true"
+    ></div>
+
+    <main class="relative mx-auto flex min-h-screen w-full max-w-lg flex-col px-4 py-8 sm:px-6 sm:py-12">
+      <header class="mb-6 animate-rise text-center">
+        <p class="font-display text-4xl font-semibold tracking-tight text-ink sm:text-5xl">日签</p>
+        <p class="mt-2 text-sm text-ink/65 sm:text-base">登录后打卡与查询；学生只看自己，管理员看全部</p>
+        <p id="session-bar" class="mt-3 hidden text-sm text-ink/70"></p>
+      </header>
+
+      <nav
+        class="mb-8 flex flex-wrap justify-center gap-x-4 gap-y-2 border-b border-ink/10 pb-1 text-sm text-ink/50 animate-rise"
+        aria-label="功能切换"
+      >
+        <button type="button" data-panel="login" class="nav-btn active border-b-2 border-transparent px-1 py-2 transition">登录</button>
+        <button type="button" data-panel="register" class="nav-btn border-b-2 border-transparent px-1 py-2 transition">注册</button>
+        <button type="button" data-panel="checkin" class="nav-btn border-b-2 border-transparent px-1 py-2 transition">打卡</button>
+        <button type="button" data-panel="query" class="nav-btn border-b-2 border-transparent px-1 py-2 transition">查询</button>
+      </nav>
+
+      <section id="panel-login" class="panel animate-rise-delay space-y-5">
+        <form id="login-form" class="space-y-4" novalidate>
+          <div>
+            <label for="login-username" class="mb-2 block text-sm font-medium text-ink/80">用户名</label>
+            <input id="login-username" class="field" autocomplete="username" placeholder="如 student 或 admin" />
+            <p id="login-username-error" class="mt-1.5 hidden text-sm text-clay" role="alert"></p>
+          </div>
+          <div>
+            <label for="login-password" class="mb-2 block text-sm font-medium text-ink/80">密码</label>
+            <input id="login-password" type="password" class="field" autocomplete="current-password" placeholder="请输入密码" />
+            <p id="login-password-error" class="mt-1.5 hidden text-sm text-clay" role="alert"></p>
+          </div>
+          <button type="submit" class="btn-primary">登录</button>
+          <p id="login-form-error" class="hidden text-center text-sm text-clay" role="alert"></p>
+          <p class="text-center text-xs text-ink/45">演示：student / student123 · admin / admin123</p>
+        </form>
+      </section>
+
+      <section id="panel-register" class="panel hidden animate-rise-delay space-y-5">
+        <form id="register-form" class="space-y-4" novalidate>
+          <div>
+            <label for="reg-username" class="mb-2 block text-sm font-medium text-ink/80">用户名</label>
+            <input id="reg-username" class="field" autocomplete="username" placeholder="至少 2 个字符" />
+            <p id="reg-username-error" class="mt-1.5 hidden text-sm text-clay" role="alert"></p>
+          </div>
+          <div>
+            <label for="reg-password" class="mb-2 block text-sm font-medium text-ink/80">密码</label>
+            <input id="reg-password" type="password" class="field" autocomplete="new-password" placeholder="至少 6 位" />
+            <p id="reg-password-error" class="mt-1.5 hidden text-sm text-clay" role="alert"></p>
+          </div>
+          <button type="submit" class="btn-primary">注册并登录</button>
+          <p id="reg-form-error" class="hidden text-center text-sm text-clay" role="alert"></p>
+          <p class="text-center text-xs text-ink/45">新用户默认角色为 student</p>
+        </form>
+      </section>
+
+      <section id="panel-checkin" class="panel hidden animate-rise-delay space-y-5">
+        <form id="checkin-form" class="space-y-4" novalidate>
+          <div>
+            <label for="name" class="mb-2 block text-sm font-medium text-ink/80">姓名</label>
+            <input id="name" name="name" type="text" autocomplete="name" placeholder="2-20 个字符" class="field" />
+            <p id="name-error" class="mt-1.5 hidden text-sm text-clay" role="alert"></p>
+          </div>
+          <div>
+            <label for="location" class="mb-2 block text-sm font-medium text-ink/80">地理位置</label>
+            <input id="location" name="location" type="text" autocomplete="address-level2" placeholder="请输入地理位置" class="field" />
+            <p id="location-error" class="mt-1.5 hidden text-sm text-clay" role="alert"></p>
+          </div>
+          <button type="submit" class="btn-primary">提交打卡</button>
+          <p id="form-error" class="hidden text-center text-sm text-clay" role="alert"></p>
+          <p id="success-message" class="hidden text-center text-sm font-medium text-moss" role="status"></p>
+          <p class="text-center text-xs text-ink/45">登录后提交会绑定账号，查询时按角色过滤</p>
+        </form>
+      </section>
+
+      <section id="panel-query" class="panel hidden animate-rise-delay space-y-4">
+        <p id="query-hint" class="text-sm text-ink/65">登录后可按姓名或时间段筛选打卡记录</p>
+        <form id="query-form" class="space-y-3" novalidate>
+          <div>
+            <label for="query-name" class="mb-1.5 block text-sm font-medium text-ink/80">姓名</label>
+            <input id="query-name" class="field" placeholder="可选，支持模糊匹配" autocomplete="off" />
+          </div>
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label for="query-start" class="mb-1.5 block text-sm font-medium text-ink/80">开始日期</label>
+              <input id="query-start" type="date" class="field" />
+            </div>
+            <div>
+              <label for="query-end" class="mb-1.5 block text-sm font-medium text-ink/80">结束日期</label>
+              <input id="query-end" type="date" class="field" />
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <button type="submit" class="btn-primary">查询</button>
+            <button type="button" id="query-reset" class="btn-ghost shrink-0">清空条件</button>
+          </div>
+        </form>
+        <p id="query-error" class="hidden text-sm text-clay" role="alert"></p>
+        <ul id="checkin-list" class="space-y-3 text-sm"></ul>
+      </section>
+    </main>
+
+    <script>
+      const STORAGE_KEY = "riqian_auth";
+      const panels = {
+        login: document.getElementById("panel-login"),
+        register: document.getElementById("panel-register"),
+        checkin: document.getElementById("panel-checkin"),
+        query: document.getElementById("panel-query"),
+      };
+      const navButtons = document.querySelectorAll(".nav-btn");
+      const sessionBar = document.getElementById("session-bar");
+
+      function getAuth() {
+        try {
+          return JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+        } catch {
+          return null;
+        }
+      }
+
+      function setAuth(data) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        renderSession();
+      }
+
+      function clearAuth() {
+        localStorage.removeItem(STORAGE_KEY);
+        renderSession();
+      }
+
+      function authHeaders() {
+        const auth = getAuth();
+        const headers = { "Content-Type": "application/json" };
+        if (auth && auth.token) headers.Authorization = `Bearer ${auth.token}`;
+        return headers;
+      }
+
+      function renderSession() {
+        const auth = getAuth();
+        if (!auth) {
+          sessionBar.classList.add("hidden");
+          sessionBar.innerHTML = "";
+          return;
+        }
+        const roleLabel = auth.role === "admin" ? "管理员" : "学生";
+        sessionBar.classList.remove("hidden");
+        sessionBar.innerHTML = `已登录：<span class="font-medium text-ink">${auth.username}</span>（${roleLabel}）
+          <button type="button" id="logout-btn" class="ml-2 underline decoration-ink/30 underline-offset-2 hover:text-moss">退出</button>`;
+        document.getElementById("logout-btn").addEventListener("click", () => {
+          clearAuth();
+          switchPanel("login");
+        });
+      }
+
+      function switchPanel(name) {
+        Object.entries(panels).forEach(([key, el]) => {
+          el.classList.toggle("hidden", key !== name);
+        });
+        navButtons.forEach((btn) => {
+          btn.classList.toggle("active", btn.dataset.panel === name);
+        });
+        if (name === "query") loadCheckins();
+        if (name === "checkin") {
+          const auth = getAuth();
+          const nameInput = document.getElementById("name");
+          if (auth && !nameInput.value.trim()) nameInput.value = auth.username;
+        }
+      }
+
+      navButtons.forEach((btn) => {
+        btn.addEventListener("click", () => switchPanel(btn.dataset.panel));
+      });
+
+      function showError(input, errorEl, message) {
+        input.classList.add("is-invalid");
+        errorEl.textContent = message;
+        errorEl.classList.remove("hidden");
+      }
+
+      function clearError(input, errorEl) {
+        input.classList.remove("is-invalid");
+        errorEl.textContent = "";
+        errorEl.classList.add("hidden");
+      }
+
+      function validateField(input, errorEl, label) {
+        const value = input.value.trim();
+        if (!value) {
+          showError(input, errorEl, `${label}不能为空`);
+          return false;
+        }
+        clearError(input, errorEl);
+        return true;
+      }
+
+      function detailMessage(data, fallback) {
+        if (typeof data.detail === "string") return data.detail;
+        if (Array.isArray(data.detail) && data.detail[0]) {
+          return (data.detail[0].msg || fallback).replace(/^Value error, /, "");
+        }
+        return fallback;
+      }
+
+      const loginForm = document.getElementById("login-form");
+      const loginUser = document.getElementById("login-username");
+      const loginPass = document.getElementById("login-password");
+      const loginUserErr = document.getElementById("login-username-error");
+      const loginPassErr = document.getElementById("login-password-error");
+      const loginFormErr = document.getElementById("login-form-error");
+
+      loginUser.addEventListener("input", () => {
+        if (loginUser.value.trim()) clearError(loginUser, loginUserErr);
+      });
+      loginPass.addEventListener("input", () => {
+        if (loginPass.value.trim()) clearError(loginPass, loginPassErr);
+      });
+
+      loginForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        loginFormErr.classList.add("hidden");
+        const uOk = validateField(loginUser, loginUserErr, "用户名");
+        const pOk = validateField(loginPass, loginPassErr, "密码");
+        if (!uOk || !pOk) return;
+
+        try {
+          const response = await fetch("/api/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              username: loginUser.value.trim(),
+              password: loginPass.value,
+            }),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            loginFormErr.textContent = detailMessage(data, "登录失败");
+            loginFormErr.classList.remove("hidden");
+            return;
+          }
+          setAuth({
+            token: data.token,
+            user_id: data.user_id,
+            username: data.username,
+            role: data.role,
+          });
+          loginPass.value = "";
+          switchPanel("checkin");
+        } catch {
+          loginFormErr.textContent = "无法连接服务器，请先启动后端";
+          loginFormErr.classList.remove("hidden");
+        }
+      });
+
+      const regForm = document.getElementById("register-form");
+      const regUser = document.getElementById("reg-username");
+      const regPass = document.getElementById("reg-password");
+      const regUserErr = document.getElementById("reg-username-error");
+      const regPassErr = document.getElementById("reg-password-error");
+      const regFormErr = document.getElementById("reg-form-error");
+
+      regUser.addEventListener("input", () => {
+        if (regUser.value.trim()) clearError(regUser, regUserErr);
+      });
+      regPass.addEventListener("input", () => {
+        if (regPass.value.trim()) clearError(regPass, regPassErr);
+      });
+
+      regForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        regFormErr.classList.add("hidden");
+        const uOk = validateField(regUser, regUserErr, "用户名");
+        const pOk = validateField(regPass, regPassErr, "密码");
+        if (!uOk || !pOk) return;
+        if (regPass.value.length < 6) {
+          showError(regPass, regPassErr, "密码至少 6 位");
+          return;
+        }
+
+        try {
+          const response = await fetch("/api/register", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              username: regUser.value.trim(),
+              password: regPass.value,
+            }),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            regFormErr.textContent = detailMessage(data, "注册失败");
+            regFormErr.classList.remove("hidden");
+            return;
+          }
+          setAuth({
+            token: data.token,
+            user_id: data.user_id,
+            username: data.username,
+            role: data.role,
+          });
+          regForm.reset();
+          switchPanel("checkin");
+        } catch {
+          regFormErr.textContent = "无法连接服务器，请先启动后端";
+          regFormErr.classList.remove("hidden");
+        }
+      });
+
+      const form = document.getElementById("checkin-form");
+      const nameInput = document.getElementById("name");
+      const locationInput = document.getElementById("location");
+      const nameError = document.getElementById("name-error");
+      const locationError = document.getElementById("location-error");
+      const successMessage = document.getElementById("success-message");
+      const formError = document.getElementById("form-error");
+
+      function validateName() {
+        const value = nameInput.value.trim();
+        if (!value) {
+          showError(nameInput, nameError, "姓名不能为空");
+          return false;
+        }
+        if (value.length < 2 || value.length > 20) {
+          showError(nameInput, nameError, "姓名长度须为 2-20 个字符");
+          return false;
+        }
+        clearError(nameInput, nameError);
+        return true;
+      }
+
+      nameInput.addEventListener("input", () => {
+        if (nameInput.value.trim()) clearError(nameInput, nameError);
+      });
+      locationInput.addEventListener("input", () => {
+        if (locationInput.value.trim()) clearError(locationInput, locationError);
+      });
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        successMessage.classList.add("hidden");
+        formError.classList.add("hidden");
+
+        const nameOk = validateName();
+        const locationOk = validateField(locationInput, locationError, "地理位置");
+        if (!nameOk || !locationOk) return;
+
+        try {
+          const response = await fetch("/api/checkins", {
+            method: "POST",
+            headers: authHeaders(),
+            body: JSON.stringify({
+              name: nameInput.value.trim(),
+              location: locationInput.value.trim(),
+            }),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            if (typeof data.detail === "string") {
+              formError.textContent = data.detail;
+              formError.classList.remove("hidden");
+              return;
+            }
+            const details = Array.isArray(data.detail) ? data.detail : [];
+            let mapped = false;
+            details.forEach((item) => {
+              const field = item.loc && item.loc[item.loc.length - 1];
+              const message = (item.msg || "不能为空").replace(/^Value error, /, "");
+              if (field === "name") {
+                showError(nameInput, nameError, `姓名${message}`);
+                mapped = true;
+              } else if (field === "location") {
+                showError(locationInput, locationError, `地理位置${message}`);
+                mapped = true;
+              }
+            });
+            if (!mapped) {
+              formError.textContent = "提交失败，请稍后重试";
+              formError.classList.remove("hidden");
+            }
+            return;
+          }
+          successMessage.textContent = `打卡成功：${data.name} · ${data.location}`;
+          successMessage.classList.remove("hidden");
+          locationInput.value = "";
+        } catch {
+          formError.textContent = "无法连接服务器，请先启动后端后再提交";
+          formError.classList.remove("hidden");
+        }
+      });
+
+      const checkinList = document.getElementById("checkin-list");
+      const queryError = document.getElementById("query-error");
+      const queryHint = document.getElementById("query-hint");
+      const queryForm = document.getElementById("query-form");
+      const queryName = document.getElementById("query-name");
+      const queryStart = document.getElementById("query-start");
+      const queryEnd = document.getElementById("query-end");
+
+      queryForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        loadCheckins();
+      });
+
+      document.getElementById("query-reset").addEventListener("click", () => {
+        queryName.value = "";
+        queryStart.value = "";
+        queryEnd.value = "";
+        loadCheckins();
+      });
+
+      async function loadCheckins() {
+        queryError.classList.add("hidden");
+        checkinList.innerHTML = "";
+        const auth = getAuth();
+        if (!auth) {
+          queryHint.textContent = "请先登录，再查询打卡记录";
+          queryError.textContent = "未登录：学生/管理员都需要先登录才能查询";
+          queryError.classList.remove("hidden");
+          return;
+        }
+
+        if (queryStart.value && queryEnd.value && queryStart.value > queryEnd.value) {
+          queryError.textContent = "开始日期不能晚于结束日期";
+          queryError.classList.remove("hidden");
+          return;
+        }
+
+        queryHint.textContent =
+          auth.role === "admin"
+            ? "管理员视图：可按姓名、时间段筛选全部打卡"
+            : "学生视图：仅在自己的记录中按姓名、时间段筛选";
+
+        const params = new URLSearchParams();
+        const nameVal = queryName.value.trim();
+        if (nameVal) params.set("name", nameVal);
+        if (queryStart.value) params.set("start_date", queryStart.value);
+        if (queryEnd.value) params.set("end_date", queryEnd.value);
+        const qs = params.toString();
+        const url = qs ? `/api/checkins?${qs}` : "/api/checkins";
+
+        try {
+          const response = await fetch(url, { headers: authHeaders() });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            queryError.textContent = detailMessage(data, "查询失败");
+            queryError.classList.remove("hidden");
+            if (response.status === 401) clearAuth();
+            return;
+          }
+
+          if (!Array.isArray(data) || data.length === 0) {
+            checkinList.innerHTML = `<li class="text-ink/55">没有符合条件的打卡记录</li>`;
+            return;
+          }
+
+          const rows = data.slice(0, 50);
+          checkinList.innerHTML = rows
+            .map(
+              (item) => `
+            <li class="border-b border-ink/10 py-3">
+              <div class="flex items-baseline justify-between gap-3">
+                <span class="font-medium">${escapeHtml(item.name)}</span>
+                <span class="shrink-0 text-xs text-ink/45">${escapeHtml(item.created_at || "")}</span>
+              </div>
+              <p class="mt-1 text-ink/65">${escapeHtml(item.location)}</p>
+            </li>`
+            )
+            .join("");
+          if (data.length > 50) {
+            checkinList.innerHTML += `<li class="pt-2 text-xs text-ink/45">仅显示最近 50 条，共 ${data.length} 条</li>`;
+          }
+        } catch {
+          queryError.textContent = "无法连接服务器，请先启动后端";
+          queryError.classList.remove("hidden");
+        }
+      }
+
+      function escapeHtml(text) {
+        return String(text)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      renderSession();
+      switchPanel(getAuth() ? "checkin" : "login");
+    </script>
+  </body>
+</html>
