@@ -5,6 +5,8 @@ venv/
 backend/.venv/
 data/*.db
 data/*.db-journal
+backups/
+migrate_out/
 *.log
 .DS_Store
 Thumbs.db

@@ -21,6 +21,18 @@ cd backend
 
 浏览器打开 http://127.0.0.1:8000/（不要双击本地 html）。
 
+## 运行测试
+
+不依赖已启动的 uvicorn，也不写入 `data/checkins.db`（每个用例用临时库）。
+
+```powershell
+cd backend
+.\.venv\Scripts\python -m pip install -r requirements.txt
+.\.venv\Scripts\python -m pytest
+```
+
+覆盖：正常打卡、10 分钟内重复打卡（409）、无 token / 假 token 查询（401）、姓名过短或位置为空（422）、学生看不到管理员打卡。
+
 ## 怎么体验权限（后台人员）
 
 1. **student / student123** 登录 → 打卡 → 点「查询」→ 只看到自己的  
