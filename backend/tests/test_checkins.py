@@ -1,9 +1,9 @@
 """打卡接口：正常打卡、10 分钟内重复、非法输入。"""
-from tests.helpers import auth_header, login
+from tests.helpers import auth_header, login_student
 
 
 def test_normal_checkin_logged_in(client):
-    token = login(client, "student", "student123")
+    token = login_student(client)
     response = client.post(
         "/api/checkins",
         json={"name": "学生甲", "location": "教学楼"},
@@ -18,7 +18,7 @@ def test_normal_checkin_logged_in(client):
 
 
 def test_duplicate_checkin_within_10_minutes(client):
-    token = login(client, "student", "student123")
+    token = login_student(client)
     first = client.post(
         "/api/checkins",
         json={"name": "学生甲", "location": "一号楼"},
@@ -32,11 +32,11 @@ def test_duplicate_checkin_within_10_minutes(client):
         headers=auth_header(token),
     )
     assert second.status_code == 409
-    assert "10 分钟" in second.json()["detail"]
+    assert "10 minutes" in second.json()["detail"]
 
 
 def test_checkin_rejects_short_name(client):
-    token = login(client, "student", "student123")
+    token = login_student(client)
     response = client.post(
         "/api/checkins",
         json={"name": "张", "location": "校园"},
@@ -46,7 +46,7 @@ def test_checkin_rejects_short_name(client):
 
 
 def test_checkin_rejects_empty_location(client):
-    token = login(client, "student", "student123")
+    token = login_student(client)
     response = client.post(
         "/api/checkins",
         json={"name": "张三", "location": "   "},
@@ -56,7 +56,7 @@ def test_checkin_rejects_empty_location(client):
 
 
 def test_checkin_rejects_too_long_name(client):
-    token = login(client, "student", "student123")
+    token = login_student(client)
     response = client.post(
         "/api/checkins",
         json={"name": "啊" * 21, "location": "校园"},

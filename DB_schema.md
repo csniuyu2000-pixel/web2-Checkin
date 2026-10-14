@@ -15,12 +15,14 @@
 
 密码：PBKDF2-SHA256，格式 `{salt}${digest}`。
 
-演示账号（启动时若不存在则自动创建）：
+演示账号（启动时按环境变量写入或同步密码哈希）：
 
 | username | 密码 | role |
 |----------|------|------|
-| admin | admin123 | admin |
-| student | student123 | student |
+| admin | `.env` 中 `DEMO_ADMIN_PASSWORD` | admin |
+| student | `.env` 中 `DEMO_STUDENT_PASSWORD` | student |
+
+弱口令（如旧版 `admin123` / `student123`）已废弃；上线前务必在 `.env` 中设置强密码。详见 [README.md](./README.md)。
 
 ## checkins（打卡记录）
 

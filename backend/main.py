@@ -19,7 +19,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
 from auth import create_token, decode_token, hash_password, verify_password
+from config import get_cors_origins, load_env
 from db import ROOT, get_connection, init_db
+
+load_env()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,13 +30,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger("riqian.api")
 
-app = FastAPI(title="日签 · 打卡")
+app = FastAPI(title="Daily Check-in")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=get_cors_origins(),
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # Bearer token：Authorization: Bearer <token>
@@ -47,18 +51,18 @@ def raise_db_error(friendly: str, exc: Exception) -> None:
 
 
 class CheckinCreate(BaseModel):
-    name: str = Field(..., description="姓名，2-20 字符")
-    location: str = Field(..., description="地理位置，非空")
+    name: str = Field(..., description="Name, 2–20 characters")
+    location: str = Field(..., description="Location, required")
 
     @field_validator("name")
     @classmethod
     def validate_name(cls, value: str) -> str:
         text = value.strip() if isinstance(value, str) else ""
         if not text:
-            raise ValueError("不能为空")
+            raise ValueError("must not be empty")
         length = len(text)
         if length < 2 or length > 20:
-            raise ValueError("长度须为 2-20 个字符")
+            raise ValueError("must be 2–20 characters")
         return text
 
     @field_validator("location")
@@ -66,7 +70,7 @@ class CheckinCreate(BaseModel):
     def validate_location(cls, value: str) -> str:
         text = value.strip() if isinstance(value, str) else ""
         if not text:
-            raise ValueError("不能为空")
+            raise ValueError("must not be empty")
         return text
 
 
@@ -87,7 +91,7 @@ class LoginRequest(BaseModel):
     def not_blank(cls, value: str) -> str:
         text = value.strip() if isinstance(value, str) else ""
         if not text:
-            raise ValueError("不能为空")
+            raise ValueError("must not be empty")
         return text
 
 
@@ -100,7 +104,7 @@ class RegisterRequest(BaseModel):
     def not_blank(cls, value: str) -> str:
         text = value.strip() if isinstance(value, str) else ""
         if not text:
-            raise ValueError("不能为空")
+            raise ValueError("must not be empty")
         return text
 
 
@@ -123,7 +127,7 @@ def get_current_user(
 ) -> CurrentUser:
     """从 Authorization Bearer token 解析当前用户；缺 token / 无效则 401。"""
     if credentials is None or not credentials.credentials:
-        raise HTTPException(status_code=401, detail="请先登录")
+        raise HTTPException(status_code=401, detail="Please log in first")
     try:
         payload = decode_token(credentials.credentials)
     except ValueError as exc:
@@ -139,7 +143,7 @@ def get_current_user(
                 (user_id,),
             ).fetchone()
         except sqlite3.Error as exc:
-            raise_db_error("读取用户信息失败，请稍后重试", exc)
+            raise_db_error("Failed to load user. Please try again later.", exc)
     finally:
         if conn is not None:
             try:
@@ -148,7 +152,7 @@ def get_current_user(
                 logger.exception("关闭数据库连接失败")
 
     if row is None:
-        raise HTTPException(status_code=401, detail="用户不存在或已失效")
+        raise HTTPException(status_code=401, detail="User not found or no longer valid")
     return CurrentUser(id=row["id"], username=row["username"], role=row["role"])
 
 
@@ -169,7 +173,7 @@ async def handle_sqlite_error(request: Request, exc: sqlite3.Error):
     logger.exception("未处理的数据库错误 path=%s", request.url.path)
     return JSONResponse(
         status_code=500,
-        content={"detail": "数据库暂时不可用，请稍后重试"},
+        content={"detail": "Database temporarily unavailable. Please try again later."},
     )
 
 
@@ -194,7 +198,7 @@ def register(payload: RegisterRequest):
                 (payload.username,),
             ).fetchone()
             if exists:
-                raise HTTPException(status_code=409, detail="用户名已被占用")
+                raise HTTPException(status_code=409, detail="Username already taken")
 
             cursor = conn.execute(
                 "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
@@ -205,7 +209,7 @@ def register(payload: RegisterRequest):
         except HTTPException:
             raise
         except sqlite3.Error as exc:
-            raise_db_error("注册失败，请稍后重试", exc)
+            raise_db_error("Registration failed. Please try again later.", exc)
     finally:
         if conn is not None:
             try:
@@ -234,7 +238,7 @@ def login(payload: LoginRequest):
                 (payload.username,),
             ).fetchone()
         except sqlite3.Error as exc:
-            raise_db_error("登录失败，请稍后重试", exc)
+            raise_db_error("Login failed. Please try again later.", exc)
     finally:
         if conn is not None:
             try:
@@ -243,7 +247,7 @@ def login(payload: LoginRequest):
                 logger.exception("关闭数据库连接失败")
 
     if row is None or not verify_password(payload.password, row["password_hash"]):
-        raise HTTPException(status_code=401, detail="用户名或密码错误")
+        raise HTTPException(status_code=401, detail="Invalid username or password")
 
     token = create_token(row["id"], row["username"], row["role"])
     return LoginResponse(
@@ -264,7 +268,7 @@ def create_checkin(
     try:
         conn = get_connection()
     except (sqlite3.Error, OSError) as exc:
-        raise_db_error("数据库连接失败，请稍后重试", exc)
+        raise_db_error("Database connection failed. Please try again later.", exc)
 
     conn.isolation_level = None
     try:
@@ -293,7 +297,7 @@ def create_checkin(
             if recent:
                 raise HTTPException(
                     status_code=409,
-                    detail="10 分钟内已有同名打卡，请稍后再试",
+                    detail="A check-in already exists within 10 minutes. Please try again later.",
                 )
 
             cursor = conn.execute(
@@ -305,7 +309,10 @@ def create_checkin(
                 (cursor.lastrowid,),
             ).fetchone()
             if row is None:
-                raise HTTPException(status_code=500, detail="打卡保存失败，请稍后重试")
+                raise HTTPException(
+                    status_code=500,
+                    detail="Failed to save check-in. Please try again later.",
+                )
 
             conn.commit()
         except HTTPException:
@@ -319,13 +326,13 @@ def create_checkin(
                 conn.rollback()
             except sqlite3.Error:
                 logger.exception("数据库错误后回滚事务失败")
-            raise_db_error("打卡保存失败，请稍后重试", exc)
+            raise_db_error("Failed to save check-in. Please try again later.", exc)
         except Exception as exc:
             try:
                 conn.rollback()
             except sqlite3.Error:
                 logger.exception("未知错误后回滚事务失败")
-            raise_db_error("打卡保存失败，请稍后重试", exc)
+            raise_db_error("Failed to save check-in. Please try again later.", exc)
         return dict(row)
     finally:
         if conn is not None:
@@ -341,23 +348,27 @@ _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 @app.get("/api/checkins", response_model=List[CheckinOut])
 def list_checkins(
     user: CurrentUser = Depends(get_current_user),
-    name: Optional[str] = Query(None, description="按姓名模糊筛选"),
-    start_date: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
-    end_date: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD"),
+    name: Optional[str] = Query(None, description="Filter by name (partial match)"),
+    start_date: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
 ):
     """需登录。admin 看全部；student 只看自己的。可选按姓名、时间段筛选。"""
     name_q = name.strip() if name else ""
     start_q = start_date.strip() if start_date else ""
     end_q = end_date.strip() if end_date else ""
 
-    for label, value in (("开始日期", start_q), ("结束日期", end_q)):
+    for label, value in (("Start date", start_q), ("End date", end_q)):
         if value and not _DATE_RE.match(value):
-            raise HTTPException(status_code=422, detail=f"{label}格式应为 YYYY-MM-DD")
+            raise HTTPException(
+                status_code=422, detail=f"{label} must be YYYY-MM-DD"
+            )
     if start_q and end_q and start_q > end_q:
-        raise HTTPException(status_code=422, detail="开始日期不能晚于结束日期")
+        raise HTTPException(
+            status_code=422, detail="Start date cannot be after end date"
+        )
 
     if user.role not in ("admin", "student"):
-        raise HTTPException(status_code=403, detail="无权查看打卡记录")
+        raise HTTPException(status_code=403, detail="Not allowed to view check-in records")
 
     conditions = []
     params: list = []
@@ -394,9 +405,9 @@ def list_checkins(
             conn = get_connection()
             rows = conn.execute(sql, params).fetchall()
         except sqlite3.Error as exc:
-            raise_db_error("查询打卡记录失败，请稍后重试", exc)
+            raise_db_error("Failed to query check-ins. Please try again later.", exc)
         except OSError as exc:
-            raise_db_error("查询打卡记录失败，请稍后重试", exc)
+            raise_db_error("Failed to query check-ins. Please try again later.", exc)
         return [dict(row) for row in rows]
     finally:
         if conn is not None:
@@ -412,4 +423,7 @@ def index():
         return FileResponse(ROOT / "index.html")
     except OSError as exc:
         logger.exception("读取首页文件失败")
-        raise HTTPException(status_code=500, detail="页面暂时无法打开，请稍后重试") from exc
+        raise HTTPException(
+            status_code=500,
+            detail="Page temporarily unavailable. Please try again later.",
+        ) from exc

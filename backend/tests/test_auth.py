@@ -1,10 +1,11 @@
 """登录、注册与查询权限：无 token、错误密码、学生看不到别人。"""
-from tests.helpers import auth_header, login
+from tests.conftest import TEST_ADMIN_PASSWORD
+from tests.helpers import auth_header, login_admin, login_student
 
 
 def test_login_success(client):
     response = client.post(
-        "/api/login", json={"username": "admin", "password": "admin123"}
+        "/api/login", json={"username": "admin", "password": TEST_ADMIN_PASSWORD}
     )
     assert response.status_code == 200
     body = response.json()
@@ -21,7 +22,7 @@ def test_login_wrong_password(client):
 
 def test_login_empty_username(client):
     response = client.post(
-        "/api/login", json={"username": "  ", "password": "admin123"}
+        "/api/login", json={"username": "  ", "password": TEST_ADMIN_PASSWORD}
     )
     assert response.status_code == 422
 
@@ -46,8 +47,8 @@ def test_query_with_invalid_token(client):
 
 
 def test_student_cannot_see_admin_checkin(client):
-    admin_token = login(client, "admin", "admin123")
-    student_token = login(client, "student", "student123")
+    admin_token = login_admin(client)
+    student_token = login_student(client)
 
     created = client.post(
         "/api/checkins",
@@ -64,8 +65,8 @@ def test_student_cannot_see_admin_checkin(client):
 
 
 def test_admin_can_see_all_checkins(client):
-    admin_token = login(client, "admin", "admin123")
-    student_token = login(client, "student", "student123")
+    admin_token = login_admin(client)
+    student_token = login_student(client)
 
     student_created = client.post(
         "/api/checkins",

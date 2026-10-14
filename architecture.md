@@ -5,10 +5,12 @@
 ```text
 浏览器（登录 / 注册 / 打卡 / 查询）
     ↓ HTTP / JSON + Bearer token
-FastAPI（main.py + auth.py）
+FastAPI（main.py + auth.py + config.py）
     ↓ sqlite3
 SQLite（users / checkins）
 ```
+
+配置（`TOKEN_SECRET` / `CORS_ORIGINS` / 演示密码）来自环境变量或根目录 `.env`，见 [README.md](./README.md)。
 
 ## 模块划分
 
@@ -16,6 +18,7 @@ SQLite（users / checkins）
 |------|------|------|
 | 前端 | 已实现 | 登录、注册、打卡、查询；token 存 localStorage |
 | 后端 | 已实现 | 注册/登录发 token、校验、按角色查打卡、异常友好返回 |
+| 配置 | 已实现 | `config.py` 读取密钥、CORS 白名单、演示账号密码 |
 | 数据库 | 已实现 | `users`、`checkins` |
 
 ## 前端模块
@@ -30,9 +33,10 @@ SQLite（users / checkins）
 
 ## 后端模块
 
-- `auth.py`：PBKDF2 密码哈希 + HMAC token（不存明文密码）
-- `db.py`：建表、种子账号、异常打日志
-- `main.py`：接口与鉴权
+- `config.py`：加载 `.env`；提供 `TOKEN_SECRET`、`CORS_ORIGINS`、演示密码
+- `auth.py`：PBKDF2 密码哈希 + HMAC token（密钥来自环境变量）
+- `db.py`：建表、按环境变量同步演示账号、异常打日志
+- `main.py`：接口与鉴权；CORS 仅允许白名单来源（禁止 `*`）
 
 ### 权限
 
@@ -57,4 +61,4 @@ SQLite（users / checkins）
 | POST | `/api/checkins` | 可选 Bearer | 打卡；登录则写 user_id |
 | GET | `/api/checkins` | **必填 Bearer** | 按 role 过滤；可选 `name`、`start_date`、`end_date` |
 
-演示账号见 [DB_schema.md](./DB_schema.md) / [README.md](./README.md)。
+演示账号用户名见 [DB_schema.md](./DB_schema.md)；密码与密钥配置见 [README.md](./README.md) 的「上线前配置」。

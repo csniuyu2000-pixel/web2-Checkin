@@ -6,6 +6,7 @@ import sqlite3
 from pathlib import Path
 
 from auth import hash_password
+from config import get_demo_admin_password, get_demo_student_password
 
 logger = logging.getLogger("riqian.db")
 
@@ -40,22 +41,28 @@ def _ensure_column(conn, table: str, column: str, definition: str):
 
 
 def _seed_users(conn):
-    """首次初始化演示账号（密码只存哈希）。"""
+    """写入/同步演示账号（密码来自环境变量，只存哈希）。"""
     demos = [
-        ("admin", "admin123", "admin"),
-        ("student", "student123", "student"),
+        ("admin", get_demo_admin_password(), "admin"),
+        ("student", get_demo_student_password(), "student"),
     ]
     for username, password, role in demos:
+        password_hash = hash_password(password)
         exists = conn.execute(
             "SELECT id FROM users WHERE username = ?",
             (username,),
         ).fetchone()
         if exists:
-            continue
-        conn.execute(
-            "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-            (username, hash_password(password), role),
-        )
+            # 启动时按 .env 同步演示账号密码，便于轮换弱口令
+            conn.execute(
+                "UPDATE users SET password_hash = ?, role = ? WHERE username = ?",
+                (password_hash, role, username),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+                (username, password_hash, role),
+            )
 
 
 def init_db():

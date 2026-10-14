@@ -7,8 +7,8 @@ import secrets
 import time
 from typing import Any, Dict
 
-# 开发用签名密钥；正式环境应改为环境变量
-TOKEN_SECRET = b"riqian-dev-secret-change-me"
+from config import get_token_secret
+
 TOKEN_TTL_SECONDS = 60 * 60 * 24  # 24 小时
 
 
@@ -58,8 +58,9 @@ def create_token(user_id: int, username: str, role: str) -> str:
     body = _b64url_encode(
         json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
     )
+    secret = get_token_secret()
     sig = _b64url_encode(
-        hmac.new(TOKEN_SECRET, body.encode("ascii"), hashlib.sha256).digest()
+        hmac.new(secret, body.encode("ascii"), hashlib.sha256).digest()
     )
     return f"{body}.{sig}"
 
@@ -69,15 +70,16 @@ def decode_token(token: str) -> Dict[str, Any]:
     try:
         body, sig = token.split(".", 1)
     except ValueError as exc:
-        raise ValueError("token 格式错误") from exc
+        raise ValueError("Invalid token format") from exc
 
+    secret = get_token_secret()
     expect = _b64url_encode(
-        hmac.new(TOKEN_SECRET, body.encode("ascii"), hashlib.sha256).digest()
+        hmac.new(secret, body.encode("ascii"), hashlib.sha256).digest()
     )
     if not hmac.compare_digest(sig, expect):
-        raise ValueError("token 签名无效")
+        raise ValueError("Invalid token signature")
 
     payload = json.loads(_b64url_decode(body).decode("utf-8"))
     if int(payload.get("exp", 0)) < int(time.time()):
-        raise ValueError("token 已过期")
+        raise ValueError("Token has expired")
     return payload

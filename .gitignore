@@ -10,3 +10,4 @@ migrate_out/
 *.log
 .DS_Store
 Thumbs.db
+.env

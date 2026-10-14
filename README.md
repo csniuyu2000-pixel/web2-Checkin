@@ -12,10 +12,37 @@
 - 姓名 2–20、位置非空（前后端都校验）
 - 10 分钟内重复打卡返回 409
 
+## 上线前配置（必做）
+
+密钥与演示密码**不再写死在代码里**，请通过环境变量配置：
+
+1. 复制 `.env.example` 为项目根目录 `.env`
+2. 填写 `TOKEN_SECRET`（≥32 字符随机串）、`DEMO_ADMIN_PASSWORD`、`DEMO_STUDENT_PASSWORD`
+3. 按部署域名设置 `CORS_ORIGINS`（逗号分隔，**禁止 `*`**；本地可保持示例中的 localhost）
+4. `.env` 已在 `.gitignore` 中，**不要提交到 git**
+
+| 变量 | 说明 |
+|------|------|
+| `TOKEN_SECRET` | Token HMAC 密钥，至少 32 字符 |
+| `CORS_ORIGINS` | 允许的前端来源，如 `http://127.0.0.1:8000,http://localhost:8000` |
+| `DEMO_ADMIN_PASSWORD` | 演示管理员密码（≥8）；启动时同步到 `admin` |
+| `DEMO_STUDENT_PASSWORD` | 演示学生密码（≥8）；启动时同步到 `student` |
+
+生成密钥示例：
+
+```powershell
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+上线时请在托管平台同样配置上述变量，并把 `CORS_ORIGINS` 改成公网 HTTPS 域名。
+
 ## 如何运行
+
+先确保根目录已有 `.env`，再安装依赖并启动：
 
 ```powershell
 cd backend
+.\.venv\Scripts\python -m pip install -r requirements.txt
 .\.venv\Scripts\python -m uvicorn main:app --reload
 ```
 
@@ -23,7 +50,7 @@ cd backend
 
 ## 运行测试
 
-不依赖已启动的 uvicorn，也不写入 `data/checkins.db`（每个用例用临时库）。
+不依赖已启动的 uvicorn，也不写入 `data/checkins.db`（每个用例用临时库；测试自带独立密钥与密码）。
 
 ```powershell
 cd backend
@@ -35,21 +62,25 @@ cd backend
 
 ## 怎么体验权限（后台人员）
 
-1. **student / student123** 登录 → 打卡 → 点「查询」→ 只看到自己的  
+演示用户名固定为 `admin` / `student`，**密码以本地 `.env` 为准**（不要使用旧的 `admin123` / `student123`）。
+
+1. 用 **student** + `.env` 中的 `DEMO_STUDENT_PASSWORD` 登录 → 打卡 → 点「查询」→ 只看到自己的  
 2. 点「退出」  
-3. **admin / admin123** 登录 → 点「查询」→ 看到全部打卡  
+3. 用 **admin** + `DEMO_ADMIN_PASSWORD` 登录 → 点「查询」→ 看到全部打卡  
 4. 或在「注册」新建学生账号再试
 
 | 用户名 | 密码 | 角色 |
 |--------|------|------|
-| admin | admin123 | 管理员 |
-| student | student123 | 学生 |
+| admin | 见 `.env` 的 `DEMO_ADMIN_PASSWORD` | 管理员 |
+| student | 见 `.env` 的 `DEMO_STUDENT_PASSWORD` | 学生 |
 
 ## 项目结构
 
 ```text
 web2/
 ├── index.html
+├── .env.example
+├── .env                 # 本地密钥，勿提交
 ├── README.md
 ├── architecture.md
 ├── DB_schema.md
@@ -57,6 +88,7 @@ web2/
 └── backend/
     ├── main.py
     ├── auth.py
+    ├── config.py
     ├── db.py
     └── requirements.txt
 ```
